@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Rabbit Invader</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #111;
+            color: white;
+            overflow: hidden; /* スクロール防止 */
+            font-family: 'Courier New', Courier, monospace;
+            touch-action: none; /* ダブルタップズームなどを無効化 */
+        }
+        canvas {
+            display: block;
+            margin: 0 auto;
+            background-color: #000;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* ゲーム操作の邪魔をしない */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        .score {
+            font-size: 20px;
+            text-align: left;
+            text-shadow: 2px 2px 0 #000;
+        }
+        .controls-hint {
+            text-align: center;
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 20px;
+        }
+        #start-screen, #game-over-screen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border: 2px solid white;
+            pointer-events: auto; /* クリック可能にする */
+            cursor: pointer;
+        }
+        h1 {
+            font-size: 24px;
+            margin: 0 0 10px 0;
+            color: #ffcc00;
+            text-shadow: 2px 2px #ff0000;
+        }
+        p {
+            margin: 5px 0;
+        }
+        .blink {
+            animation: blinker 1s linear infinite;
+        }
+        @keyframes blinker {
+            50% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ゲーム画面 -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- UIオーバーレイ -->
+    <div id="ui-layer">
+        <div class="score">SCORE: <span id="scoreVal">0</span></div>
+        <div class="controls-hint" id="controlsHint">
+            ← LEFT / RIGHT →
+        </div>
+    </div>
+
+    <!-- スタート画面 -->
+    <div id="start-screen">
+        <h1>RABBIT INVADER</h1>
+        <p class="blink">TAP TO START</p>
+        <p style="font-size: 12px; margin-top: 15px;">白いうさぎで敵を撃て！</p>
+    </div>
+
+    <!-- ゲームオーバー画面（最初は非表示） -->
+    <div id="game-over-screen" style="display: none;">
+        <h1>GAME OVER</h1>
+        <p>SCORE: <span id="finalScore">0</span></p>
+        <p class="blink">TAP TO RESTART</p>
+    </div>
+
+<script>
+/**
+ * ==========================================
+ * 設定・定数 (調整しやすいようにここにまとめています)
+ * ==========================================
+ */
+const GAME_WIDTH = 320;  // ゲーム内部の論理幅 (レトロ感を出すため低解像度)
+const GAME_HEIGHT = 480; // ゲーム内部の論理高さ
+const PLAYER_SPEED = 4;  // 自機の移動スピード
+const BULLET_SPEED = 6;  // 弾のスピード
+const BULLET_COOLDOWN = 20; // 弾の発射間隔 (フレーム数)
+const ENEMY_SPEED_BASE = 0.5; // 敵の基本的な移動スピード
+const ENEMY_DROP_DISTANCE = 10; // 端に着いたときに降りる距離
+const TARGET_FPS = 60;   // 目標FPS
+
+// 色設定
+const COLOR_BG = "#000000"; // 背景色
+const COLOR_PLAYER = "#FFFFFF"; // うさぎの色
+const COLOR_ENEMY = "#FF00FF";  // 敵の色（マゼンタ）
+const COLOR_BULLET = "#FFFF00"; // 弾の色（黄色）
+const COLOR_MOUNTAIN = "#222244"; // 山の色（暗い青紫）
+
+// ドット絵データ (0: 透明, 1: 描画)
+// 各ドットは 2x2 ピクセルなどで描画して拡大する
+const SPRITE_SCALE = 2; // スプライトの拡大率
+
+// 自機: うさぎ (11x8)
+const SPRITE_PLAYER = [
+    [0,0,1,0,0,0,0,0,1,0,0], // 耳
+    [0,0,1,0,0,0,0,0,1,0,0],
+    [0,0,1,0,0,0,0,0,1,0,0],
+    [0,0,1,1,1,1,1,1,1,0,0], // 頭
+    [0,1,1,1,0,1,0,1,1,1,0], // 目
+    [1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1],
+    [0,1,1,0,0,0,0,0,1,1,0]  // 足
+];
+
+// 敵: インベーダータイプ1 (11x8)
+const SPRITE_ENEMY_1 = [
+    [0,0,1,0,0,0,0,0,1,0,0],
+    [0,0,0,1,0,0,0,1,0,0,0],
+    [0,0,1,1,1,1,1,1,1,0,0],
+    [0,1,1,0,1,1,1,0,1,1,0],
+    [1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,1,1,1,1,1,1,1,0,1],
+    [1,0,1,0,0,0,0,0,1,0,1],
+    [0,0,0,1,1,0,1,1,0,0,0]
+];
+// 敵: アニメーション用パターン2
+const SPRITE_ENEMY_2 = [
+    [0,0,1,0,0,0,0,0,1,0,0],
+    [1,0,0,1,0,0,0,1,0,0,1],
+    [1,0,1,1,1,1,1,1,1,0,1],
+    [1,1,1,0,1,1,1,0,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1],
+    [0,1,1,1,1,1,1,1,1,1,0],
+    [0,0,1,0,0,0,0,0,1,0,0],
+    [0,1,0,0,0,0,0,0,0,1,0]
+];
+
+
+/**
+ * ==========================================
+ * ゲームエンジン・ロジック
+ * ==========================================
+ */
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+// ドット感を出すためにアンチエイリアスを無効化
+ctx.imageSmoothingEnabled = false;
+
+// UI要素
+const scoreEl = document.getElementById('scoreVal');
+const finalScoreEl = document.getElementById('finalScore');
+const startScreen = document.getElementById('start-screen');
+const gameOverScreen = document.getElementById('game-over-screen');
+const controlsHintEl = document.getElementById('controlsHint');
+
+// ゲーム状態
+let gameState = 'START'; // START, PLAYING, GAMEOVER
+let score = 0;
+let frames = 0;
+let inputState = { left: false, right: false };
+
+// オブジェクト管理
+let player = { x: 0, y: 0, w: 0, h: 0, cooldown: 0 };
+let bullets = [];
+let enemies = [];
+let particles = []; // 爆発エフェクト用
+
+// 敵の移動管理
+let enemyDir = 1; // 1: 右, -1: 左
+let enemyMoveTimer = 0;
+let enemyMoveInterval = 30; // 何フレームごとに敵が動くか（カクカク動くレトロ感）
+
+// リサイズ処理 (レスポンシブ対応)
+function resize() {
+    // 画面アスペクト比に合わせて最大化
+    const scale = Math.min(window.innerWidth / GAME_WIDTH, window.innerHeight / GAME_HEIGHT);
+    canvas.style.width = (GAME_WIDTH * scale) + "px";
+    canvas.style.height = (GAME_HEIGHT * scale) + "px";
+    
+    // Canvasの内部解像度は固定
+    canvas.width = GAME_WIDTH;
+    canvas.height = GAME_HEIGHT;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// 初期化
+function initGame() {
+    score = 0;
+    scoreEl.innerText = score;
+    frames = 0;
+    gameState = 'PLAYING';
+    
+    // プレイヤー初期位置
+    player.w = SPRITE_PLAYER[0].length * SPRITE_SCALE;
+    player.h = SPRITE_PLAYER.length * SPRITE_SCALE;
+    player.x = GAME_WIDTH / 2 - player.w / 2;
+    player.y = GAME_HEIGHT - player.h - 20;
+    player.cooldown = 0;
+
+    bullets = [];
+    particles = [];
+    
+    // 敵を配置
+    createEnemies();
+
+    // UI更新
+    startScreen.style.display = 'none';
+    gameOverScreen.style.display = 'none';
+    controlsHintEl.style.opacity = 1;
+
+    // ゲームループ開始（もし止まっていたら）
+    if (!gameLoopId) {
+        lastTime = performance.now();
+        gameLoop();
+    }
+}
+
+function createEnemies() {
+    enemies = [];
+    const rows = 4;
+    const cols = 6;
+    const padding = 10;
+    const startX = 20;
+    const startY = 40;
+    
+    const w = SPRITE_ENEMY_1[0].length * SPRITE_SCALE;
+    const h = SPRITE_ENEMY_1.length * SPRITE_SCALE;
+
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            enemies.push({
+                x: startX + c * (w + padding),
+                y: startY + r * (h + padding),
+                w: w,
+                h: h,
+                type: (r % 2 === 0) ? 1 : 2, // 行ごとにタイプを変える（今のところ見た目は同じロジックで切り替え）
+                alive: true
+            });
+        }
+    }
+    enemyMoveInterval = 30; // 初期スピード
+}
+
+// 入力イベントリスナー
+function handleTouchStart(e) {
+    if (gameState !== 'PLAYING') return;
+    const rect = canvas.getBoundingClientRect();
+    // 最初のタッチ位置を取得
+    const touchX = e.touches[0].clientX;
+    const centerX = rect.left + rect.width / 2;
+
+    if (touchX < centerX) {
+        inputState.left = true;
+        inputState.right = false;
+    } else {
+        inputState.left = false;
+        inputState.right = true;
+    }
+}
+
+function handleTouchEnd(e) {
+    // タッチがなくなったら停止
+    if (e.touches.length === 0) {
+        inputState.left = false;
+        inputState.right = false;
+    }
+}
+
+// タッチ操作
+window.addEventListener('touchstart', handleTouchStart);
+window.addEventListener('touchmove', handleTouchStart); // スライド操作対応
+window.addEventListener('touchend', handleTouchEnd);
+
+// マウス操作（PCデバッグ用）
+window.addEventListener('mousedown', (e) => {
+    if (gameState !== 'PLAYING') return;
+    const center = window.innerWidth / 2;
+    if (e.clientX < center) inputState.left = true;
+    else inputState.right = true;
+});
+window.addEventListener('mouseup', () => {
+    inputState.left = false;
+    inputState.right = false;
+});
+
+// キーボード操作
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft') inputState.left = true;
+    if (e.key === 'ArrowRight') inputState.right = true;
+});
+window.addEventListener('keyup', (e) => {
+    if (e.key === 'ArrowLeft') inputState.left = false;
+    if (e.key === 'ArrowRight') inputState.right = false;
+});
+
+// ゲームスタート/リスタートのトリガー
+startScreen.addEventListener('click', () => {
+    if (gameState === 'START') initGame();
+});
+startScreen.addEventListener('touchstart', () => { // スマホ用
+    if (gameState === 'START') initGame();
+});
+
+gameOverScreen.addEventListener('click', () => {
+    if (gameState === 'GAMEOVER') initGame();
+});
+
+
+/**
+ * ==========================================
+ * 更新ループ (Update)
+ * ==========================================
+ */
+function update() {
+    if (gameState !== 'PLAYING') return;
+
+    frames++;
+
+    // --- プレイヤー移動 ---
+    if (inputState.left) {
+        player.x -= PLAYER_SPEED;
+    }
+    if (inputState.right) {
+        player.x += PLAYER_SPEED;
+    }
+    // 画面外に出ないように制限
+    if (player.x < 0) player.x = 0;
+    if (player.x + player.w > GAME_WIDTH) player.x = GAME_WIDTH - player.w;
+
+    // --- 弾の発射 (自動) ---
+    if (player.cooldown > 0) player.cooldown--;
+    if (player.cooldown <= 0) {
+        // 自機の中央から発射
+        bullets.push({
+            x: player.x + player.w / 2 - 2, // 幅4pxの弾
+            y: player.y,
+            w: 4,
+            h: 8,
+            active: true
+        });
+        player.cooldown = BULLET_COOLDOWN;
+    }
+
+    // --- 弾の移動 ---
+    for (let b of bullets) {
+        b.y -= BULLET_SPEED;
+        if (b.y < -10) b.active = false;
+    }
+    bullets = bullets.filter(b => b.active);
+
+    // --- 敵の移動 (カクカク動かす) ---
+    if (frames % enemyMoveInterval === 0) {
+        let hitEdge = false;
+        // まず横に動かす
+        for (let e of enemies) {
+            if (!e.alive) continue;
+            e.x += (10 * enemyDir);
+            
+            // 画面端判定
+            if (e.x <= 0 || e.x + e.w >= GAME_WIDTH) {
+                hitEdge = true;
+            }
+        }
+
+        // 端に着いたら一段下げる＆逆方向へ
+        if (hitEdge) {
+            enemyDir *= -1;
+            for (let e of enemies) {
+                if (!e.alive) continue;
+                e.y += ENEMY_DROP_DISTANCE;
+                // ゲームオーバー判定: 敵が下まで来た
+                if (e.y + e.h >= player.y) {
+                    gameOver();
+                }
+            }
+            // 敵の動きを少し速くする（難易度上昇）
+            if (enemyMoveInterval > 5) enemyMoveInterval -= 2;
+        }
+    }
+
+    // --- 当たり判定 ---
+    // 弾 vs 敵
+    for (let b of bullets) {
+        if (!b.active) continue;
+        for (let e of enemies) {
+            if (!e.alive) continue;
+
+            if (rectIntersect(b.x, b.y, b.w, b.h, e.x, e.y, e.w, e.h)) {
+                e.alive = false;
+                b.active = false;
+                score += 100;
+                scoreEl.innerText = score;
+                createExplosion(e.x + e.w/2, e.y + e.h/2, COLOR_ENEMY);
+                break;
+            }
+        }
+    }
+
+    // 敵全滅チェック
+    if (enemies.every(e => !e.alive)) {
+        // 次のレベルへ（敵復活・速度アップ）
+        setTimeout(() => {
+            createEnemies();
+            // 難易度調整: さらに速く
+            enemyMoveInterval = Math.max(5, enemyMoveInterval - 5);
+        }, 1000);
+    }
+
+    // --- パーティクル更新 ---
+    updateParticles();
+}
+
+function rectIntersect(x1, y1, w1, h1, x2, y2, w2, h2) {
+    return x2 < x1 + w1 && x2 + w2 > x1 && y2 < y1 + h1 && y2 + h2 > y1;
+}
+
+function gameOver() {
+    gameState = 'GAMEOVER';
+    finalScoreEl.innerText = score;
+    gameOverScreen.style.display = 'block';
+    controlsHintEl.style.opacity = 0;
+}
+
+// 爆発エフェクト
+function createExplosion(x, y, color) {
+    for (let i = 0; i < 8; i++) {
+        particles.push({
+            x: x,
+            y: y,
+            vx: (Math.random() - 0.5) * 4,
+            vy: (Math.random() - 0.5) * 4,
+            life: 20,
+            color: color
+        });
+    }
+}
+
+function updateParticles() {
+    for (let p of particles) {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+    }
+    particles = particles.filter(p => p.life > 0);
+}
+
+
+/**
+ * ==========================================
+ * 描画ループ (Draw)
+ * ==========================================
+ */
+let gameLoopId;
+let lastTime = 0;
+
+function gameLoop(time) {
+    gameLoopId = requestAnimationFrame(gameLoop);
+    const deltaTime = time - lastTime;
+    
+    // FPS制御（おおよそ60FPSに制限）
+    if (deltaTime < 1000 / TARGET_FPS) return;
+    lastTime = time;
+
+    update();
+    draw();
+}
+
+function draw() {
+    // 画面クリア
+    ctx.fillStyle = COLOR_BG;
+    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+    // --- 背景: 富士山(扇山)シルエット ---
+    drawMountain();
+    
+    // --- 星空 (ランダムな点) ---
+    drawStars();
+
+    if (gameState === 'PLAYING' || gameState === 'GAMEOVER') {
+        // --- プレイヤー描画 ---
+        drawSprite(ctx, SPRITE_PLAYER, player.x, player.y, COLOR_PLAYER, SPRITE_SCALE);
+
+        // --- 敵描画 ---
+        // 時間経過でアニメーションパターンを切り替え
+        // 30フレームごとにパターンを変える (Math.floor(frames / 30) % 2)
+        const animFrame = Math.floor(frames / 30) % 2;
+        const spriteToUse = animFrame === 0 ? SPRITE_ENEMY_1 : SPRITE_ENEMY_2;
+
+        for (let e of enemies) {
+            if (e.alive) {
+                drawSprite(ctx, spriteToUse, e.x, e.y, COLOR_ENEMY, SPRITE_SCALE);
+            }
+        }
+
+        // --- 弾描画 ---
+        ctx.fillStyle = COLOR_BULLET;
+        for (let b of bullets) {
+            ctx.fillRect(b.x, b.y, b.w, b.h);
+        }
+
+        // --- パーティクル描画 ---
+        for (let p of particles) {
+            ctx.fillStyle = p.color;
+            ctx.fillRect(p.x, p.y, 4, 4); // 少し大きめのドット
+        }
+    }
+}
+
+// ドット絵描画関数
+function drawSprite(context, spriteData, startX, startY, color, scale) {
+    context.fillStyle = color;
+    for (let r = 0; r < spriteData.length; r++) {
+        for (let c = 0; c < spriteData[r].length; c++) {
+            if (spriteData[r][c] === 1) {
+                context.fillRect(
+                    startX + c * scale,
+                    startY + r * scale,
+                    scale,
+                    scale
+                );
+            }
+        }
+    }
+}
+
+// 背景の山を描画
+function drawMountain() {
+    ctx.fillStyle = COLOR_MOUNTAIN;
+    ctx.beginPath();
+    ctx.moveTo(0, GAME_HEIGHT);
+    ctx.lineTo(0, GAME_HEIGHT - 60); // 左端の高さ
+    
+    // 扇山っぽいなだらかな形
+    ctx.bezierCurveTo(
+        GAME_WIDTH * 0.3, GAME_HEIGHT - 120, // 制御点1
+        GAME_WIDTH * 0.7, GAME_HEIGHT - 120, // 制御点2
+        GAME_WIDTH, GAME_HEIGHT - 60         // 右端
+    );
+    
+    ctx.lineTo(GAME_WIDTH, GAME_HEIGHT);
+    ctx.closePath();
+    ctx.fill();
+}
+
+// 星をちらつかせる
+function drawStars() {
+    ctx.fillStyle = "#555";
+    // 固定の位置にいくつか描画（簡易的）
+    // 擬似乱数っぽく配置
+    const stars = [
+        [50, 50], [100, 150], [250, 80], [300, 200], [20, 300], [180, 40], [220, 350]
+    ];
+    for (let s of stars) {
+        if (Math.random() > 0.05) { // たまに瞬く
+            ctx.fillRect(s[0], s[1], 2, 2);
+        }
+    }
+}
+
+// 初期画面も一度描画しておく
+resize();
+draw();
+drawMountain(); // 背景だけ見せておく
+
+</script>
+</body>
+</html>
