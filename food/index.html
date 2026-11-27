@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f9e6e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="きげん帳">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>食材きげん帳</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+:root {
+  --bg: #f6f7f5;
+  --card: #ffffff;
+  --text: #1d2321;
+  --muted: #6b7470;
+  --line: #e3e6e3;
+  --accent: #2f9e6e;
+  --accent-ink: #ffffff;
+  --red: #d64545;   --red-bg: #fdecec;
+  --orange: #d9822b; --orange-bg: #fdf1e4;
+  --yellow: #b8930b; --yellow-bg: #fbf6dc;
+  --green: #2f9e6e; --green-bg: #e6f5ee;
+  --shadow: 0 1px 3px rgba(0,0,0,.08);
+  --radius: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121514;
+    --card: #1c201e;
+    --text: #e9ecea;
+    --muted: #9aa39f;
+    --line: #2c3230;
+    --accent: #3fbf87;
+    --accent-ink: #0d1411;
+    --red: #ff7b7b;   --red-bg: #3a1f1f;
+    --orange: #f5a55a; --orange-bg: #3a2a1a;
+    --yellow: #e6c449; --yellow-bg: #35301a;
+    --green: #3fbf87; --green-bg: #18322a;
+    --shadow: none;
+  }
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", sans-serif;
+  font-size: 16px; line-height: 1.45;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+
+header {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--bg);
+  padding: calc(10px + env(safe-area-inset-top)) 16px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.topbar { display: flex; align-items: center; gap: 8px; }
+.topbar h1 { font-size: 20px; margin: 0; flex: 1; letter-spacing: .02em; }
+.sync { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.sync.err { color: var(--red); }
+.icon-btn {
+  width: 40px; height: 40px; border-radius: 50%; border: 0;
+  background: transparent; font-size: 20px; display: grid; place-items: center;
+}
+.icon-btn:active { background: var(--line); }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+.chip {
+  border: 1px solid var(--line); background: var(--card); border-radius: 12px;
+  padding: 8px 6px; text-align: center; box-shadow: var(--shadow);
+}
+.chip b { display: block; font-size: 22px; line-height: 1.1; }
+.chip span { font-size: 12px; color: var(--muted); }
+.chip.red b { color: var(--red); }
+.chip.orange b { color: var(--orange); }
+.chip.active { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+.tabs { display: flex; gap: 6px; overflow-x: auto; margin-top: 10px; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  flex: none; border: 1px solid var(--line); background: var(--card);
+  padding: 6px 14px; border-radius: 999px; font-size: 14px;
+}
+.tab.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.search {
+  width: 100%; margin-top: 10px; padding: 9px 12px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--card);
+}
+
+main { padding: 12px 16px; max-width: 720px; margin: 0 auto; }
+.list { display: flex; flex-direction: column; gap: 10px; }
+.item {
+  display: flex; align-items: stretch; gap: 12px;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 12px; box-shadow: var(--shadow);
+}
+.badge {
+  flex: none; width: 62px; border-radius: 10px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; text-align: center; padding: 4px;
+}
+.badge b { font-size: 20px; line-height: 1.1; }
+.badge small { font-size: 11px; }
+.lv-red .badge { background: var(--red-bg); color: var(--red); }
+.lv-orange .badge { background: var(--orange-bg); color: var(--orange); }
+.lv-yellow .badge { background: var(--yellow-bg); color: var(--yellow); }
+.lv-green .badge { background: var(--green-bg); color: var(--green); }
+.lv-red { border-color: color-mix(in srgb, var(--red) 40%, var(--line)); }
+.body { flex: 1; min-width: 0; }
+.name { font-weight: 700; font-size: 17px; overflow-wrap: anywhere; }
+.qty { font-weight: 400; color: var(--muted); font-size: 14px; margin-left: 4px; }
+.meta { font-size: 13px; color: var(--muted); margin-top: 2px; overflow-wrap: anywhere; }
+.memo { font-size: 13px; margin-top: 4px; overflow-wrap: anywhere; }
+.actions { display: flex; flex-direction: column; gap: 6px; justify-content: center; flex: none; }
+.use-btn {
+  border: 1px solid var(--accent); color: var(--accent); background: transparent;
+  border-radius: 10px; padding: 8px 10px; font-size: 13px; font-weight: 700; white-space: nowrap;
+}
+.use-btn:active { background: var(--green-bg); }
+.empty { text-align: center; color: var(--muted); padding: 48px 16px; }
+.empty .big { font-size: 48px; }
+
+.fab {
+  position: fixed; right: 20px; bottom: calc(20px + env(safe-area-inset-bottom)); z-index: 20;
+  height: 58px; padding: 0 22px; border-radius: 29px; border: 0;
+  background: var(--accent); color: var(--accent-ink); font-size: 17px; font-weight: 700;
+  box-shadow: 0 4px 14px rgba(0,0,0,.25);
+}
+
+/* bottom sheet */
+.backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 30;
+  display: none; align-items: flex-end; justify-content: center;
+}
+.backdrop.open { display: flex; }
+.sheet {
+  width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto;
+  background: var(--card); border-radius: 18px 18px 0 0;
+  padding: 16px 16px calc(20px + env(safe-area-inset-bottom));
+  animation: up .18s ease-out;
+}
+@keyframes up { from { transform: translateY(30px); opacity: .6; } }
+.sheet h2 { margin: 0 0 12px; font-size: 18px; display: flex; align-items: center; }
+.sheet h2 span { flex: 1; }
+label.f { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+.in {
+  width: 100%; padding: 11px 12px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--bg); font-size: 16px;
+}
+textarea.in { resize: vertical; min-height: 60px; }
+.row { display: flex; gap: 8px; }
+.row > * { flex: 1; }
+.quick { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.quick button, .seg button {
+  border: 1px solid var(--line); background: var(--bg); border-radius: 8px;
+  padding: 6px 10px; font-size: 13px;
+}
+.seg { display: flex; gap: 6px; flex-wrap: wrap; }
+.seg button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btns { display: flex; gap: 8px; margin-top: 18px; }
+.btn {
+  flex: 1; padding: 13px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--bg); font-weight: 700;
+}
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.danger { color: var(--red); }
+.note { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+.box { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 14px; }
+.box h3 { margin: 0 0 4px; font-size: 15px; }
+
+.toast {
+  position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom));
+  transform: translateX(-50%); z-index: 40;
+  background: #222; color: #fff; padding: 10px 14px; border-radius: 12px;
+  display: none; align-items: center; gap: 12px; max-width: calc(100% - 32px);
+  font-size: 14px; box-shadow: 0 4px 14px rgba(0,0,0,.3);
+}
+.toast.show { display: flex; }
+.toast button { background: transparent; border: 0; color: #7ee2b0; font-weight: 700; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="topbar">
+    <h1>🥕 食材きげん帳</h1>
+    <span class="sync" id="syncLabel"></span>
+    <button class="icon-btn" id="refreshBtn" aria-label="更新">⟳</button>
+    <button class="icon-btn" id="settingsBtn" aria-label="設定">⚙︎</button>
+  </div>
+  <div class="summary">
+    <button class="chip red" data-filter="expired"><b id="cntExpired">0</b><span>期限切れ</span></button>
+    <button class="chip orange" data-filter="soon"><b id="cntSoon">0</b><span>3日以内</span></button>
+    <button class="chip" data-filter="all"><b id="cntAll">0</b><span>ぜんぶ</span></button>
+  </div>
+  <div class="tabs" id="locTabs"></div>
+  <input class="search" id="search" type="search" placeholder="🔍 食材名・メモで検索">
+</header>
+
+<main>
+  <div class="list" id="list"></div>
+</main>
+
+<button class="fab" id="addBtn">＋ 追加</button>
+
+<!-- 追加・編集 -->
+<div class="backdrop" id="editSheet">
+  <form class="sheet" id="editForm" autocomplete="off">
+    <h2><span id="editTitle">食材を追加</span><button type="button" class="icon-btn" data-close>✕</button></h2>
+
+    <label class="f" for="fName">食材名</label>
+    <input class="in" id="fName" list="nameHistory" required maxlength="60" placeholder="例：牛乳、豚こま肉">
+    <datalist id="nameHistory"></datalist>
+
+    <label class="f" for="fExpiry">期限日</label>
+    <input class="in" id="fExpiry" type="date" required>
+    <div class="quick" id="quickDates">
+      <button type="button" data-d="0">今日</button>
+      <button type="button" data-d="1">明日</button>
+      <button type="button" data-d="3">+3日</button>
+      <button type="button" data-d="7">+1週間</button>
+      <button type="button" data-d="14">+2週間</button>
+      <button type="button" data-m="1">+1ヶ月</button>
+      <button type="button" data-m="3">+3ヶ月</button>
+    </div>
+
+    <label class="f">期限の種類</label>
+    <div class="seg" id="fKind">
+      <button type="button" data-v="消費期限" class="on">消費期限</button>
+      <button type="button" data-v="賞味期限">賞味期限</button>
+    </div>
+
+    <label class="f">保存場所</label>
+    <div class="seg" id="fLoc"></div>
+
+    <div class="row">
+      <div>
+        <label class="f" for="fQty">数量</label>
+        <input class="in" id="fQty" type="number" min="1" max="999" inputmode="numeric" value="1">
+      </div>
+      <div>
+        <label class="f" for="fUnit">単位</label>
+        <input class="in" id="fUnit" maxlength="10" placeholder="個・パック・本" list="unitList">
+        <datalist id="unitList"><option>個</option><option>パック</option><option>本</option><option>袋</option><option>枚</option><option>g</option></datalist>
+      </div>
+    </div>
+
+    <label class="f" for="fMemo">メモ（任意）</label>
+    <textarea class="in" id="fMemo" maxlength="200" placeholder="例：開封済み、お弁当用"></textarea>
+
+    <p class="note" id="fInfo"></p>
+
+    <div class="btns">
+      <button type="button" class="btn danger" id="deleteBtn">捨てた・削除</button>
+      <button type="submit" class="btn primary">保存</button>
+    </div>
+  </form>
+</div>
+
+<!-- 設定 -->
+<div class="backdrop" id="settingsSheet">
+  <div class="sheet">
+    <h2><span>設定</span><button type="button" class="icon-btn" data-close>✕</button></h2>
+
+    <label class="f" for="sName">あなたの名前（記録者として表示）</label>
+    <input class="in" id="sName" maxlength="20" placeholder="例：ママ、たろう">
+
+    <div class="box">
+      <h3>👨‍👩‍👧 家族で共有</h3>
+      <p class="note" id="modeNote"></p>
+      <label class="f" for="sUrl">共有サーバーURL（Google Apps Script）</label>
+      <input class="in" id="sUrl" inputmode="url" placeholder="https://script.google.com/macros/s/…/exec">
+      <label class="f" for="sKey">合言葉（サーバー側で設定した場合）</label>
+      <input class="in" id="sKey" maxlength="60" placeholder="空欄でもOK">
+      <div class="btns">
+        <button type="button" class="btn" id="testBtn">接続テスト</button>
+        <button type="button" class="btn primary" id="shareBtn">家族に招待リンクを送る</button>
+      </div>
+      <p class="note">招待リンクを家族がスマホで開くだけで、同じリストを見られるようになります。設定方法は <a href="https://github.com/ainetfield/rabbit-invader/blob/main/food/README.md" target="_blank" rel="noopener">README</a> を参照。</p>
+    </div>
+
+    <div class="box">
+      <h3>📲 ホーム画面に追加</h3>
+      <p class="note">iPhone：Safariの共有ボタン →「ホーム画面に追加」<br>Android：Chromeのメニュー →「ホーム画面に追加」</p>
+    </div>
+
+    <div class="btns">
+      <button type="button" class="btn primary" id="saveSettingsBtn">設定を保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span id="toastMsg"></span><button id="toastAction"></button></div>
+
+<script>
+(() => {
+"use strict";
+
+// ---------- 定数・ユーティリティ ----------
+const LOCATIONS = ["冷蔵", "冷凍", "野菜室", "常温"];
+const LOC_ICON = { "冷蔵": "🧊", "冷凍": "❄️", "野菜室": "🥬", "常温": "🏠" };
+const LS = {
+  items: "food.items",
+  settings: "food.settings",
+  history: "food.nameHistory",
+};
+const $ = (id) => document.getElementById(id);
+
+function lsGet(key, fallback) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+  catch { return fallback; }
+}
+function lsSet(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function uid() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+function ymd(d) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function parseYmd(s) {
+  const [y, m, d] = String(s).split("-").map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+}
+function today0() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
+function daysLeft(expiry) {
+  return Math.round((parseYmd(expiry) - today0()) / 86400000);
+}
+function level(days) {
+  if (days < 0) return "red";
+  if (days <= 2) return "orange";
+  if (days <= 6) return "yellow";
+  return "green";
+}
+function fmtDate(s) {
+  const d = parseYmd(s);
+  const w = "日月火水木金土"[d.getDay()];
+  return `${d.getMonth() + 1}/${d.getDate()}(${w})`;
+}
+function timeAgo(ts) {
+  const sec = Math.floor((Date.now() - ts) / 1000);
+  if (sec < 60) return "たった今";
+  if (sec < 3600) return `${Math.floor(sec / 60)}分前`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}時間前`;
+  return `${Math.floor(sec / 86400)}日前`;
+}
+
+// ---------- 状態 ----------
+let settings = Object.assign({ name: "", apiUrl: "", key: "" }, lsGet(LS.settings, {}));
+let items = lsGet(LS.items, []);
+let view = { filter: "all", loc: "すべて", q: "" };
+let lastSync = 0;
+let syncing = false;
+let syncError = "";
+let editingId = null;
+
+const isShared = () => !!settings.apiUrl;
+
+// ---------- 招待リンクの読み込み (#setup=...) ----------
+function readSetupFromHash() {
+  const m = location.hash.match(/setup=([^&]+)/);
+  if (!m) return false;
+  try {
+    const json = decodeURIComponent(escape(atob(decodeURIComponent(m[1]))));
+    const cfg = JSON.parse(json);
+    if (cfg.u && /^https:\/\//.test(cfg.u)) {
+      settings.apiUrl = cfg.u;
+      settings.key = cfg.k || "";
+      lsSet(LS.settings, settings);
+      history.replaceState(null, "", location.pathname + location.search);
+      return true;
+    }
+  } catch {}
+  return false;
+}
+function makeInviteLink() {
+  const payload = btoa(unescape(encodeURIComponent(JSON.stringify({ u: settings.apiUrl, k: settings.key }))));
+  return location.origin + location.pathname + "#setup=" + encodeURIComponent(payload);
+}
+
+// ---------- サーバー通信 (Google Apps Script) ----------
+async function api(action, extra = {}) {
+  // text/plain にすることで CORS プリフライトを避ける
+  const res = await fetch(settings.apiUrl, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(Object.assign({ action, key: settings.key }, extra)),
+    redirect: "follow",
+  });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || "サーバーエラー");
+  return data;
+}
+
+function setItems(next) {
+  items = next;
+  lsSet(LS.items, items);
+  render();
+}
+
+async function sync() {
+  if (!isShared() || syncing) return;
+  syncing = true; updateSyncLabel();
+  try {
+    const data = await api("list");
+    lastSync = Date.now();
+    syncError = "";
+    setItems(data.items);
+  } catch (e) {
+    syncError = "同期できませんでした";
+    console.warn(e);
+  } finally {
+    syncing = false; updateSyncLabel();
+  }
+}
+
+async function saveItem(item) {
+  const idx = items.findIndex((x) => x.id === item.id);
+  const next = items.slice();
+  if (idx >= 0) next[idx] = item; else next.push(item);
+  setItems(next);
+  if (!isShared()) return;
+  try {
+    const data = await api("upsert", { item });
+    lastSync = Date.now(); syncError = "";
+    setItems(data.items);
+  } catch (e) {
+    syncError = "保存に失敗";
+    toast("サーバーに保存できませんでした。通信を確認してください");
+  }
+  updateSyncLabel();
+}
+
+async function removeItem(id) {
+  setItems(items.filter((x) => x.id !== id));
+  if (!isShared()) return;
+  try {
+    const data = await api("delete", { id });
+    lastSync = Date.now(); syncError = "";
+    setItems(data.items);
+  } catch (e) {
+    syncError = "削除に失敗";
+    toast("サーバーから削除できませんでした");
+  }
+  updateSyncLabel();
+}
+
+function updateSyncLabel() {
+  const el = $("syncLabel");
+  $("refreshBtn").classList.toggle("spin", syncing);
+  $("refreshBtn").style.display = isShared() ? "" : "none";
+  if (!isShared()) { el.textContent = "この端末のみ"; el.className = "sync"; return; }
+  if (syncError) { el.textContent = "⚠ " + syncError; el.className = "sync err"; return; }
+  el.className = "sync";
+  el.textContent = lastSync ? "同期 " + timeAgo(lastSync) : "";
+}
+
+// ---------- 描画 ----------
+function render() {
+  const sorted = items.slice().sort((a, b) => a.expiry.localeCompare(b.expiry) || a.name.localeCompare(b.name, "ja"));
+  let expired = 0, soon = 0;
+  for (const it of sorted) {
+    const d = daysLeft(it.expiry);
+    if (d < 0) expired++; else if (d <= 3) soon++;
+  }
+  $("cntExpired").textContent = expired;
+  $("cntSoon").textContent = soon;
+  $("cntAll").textContent = sorted.length;
+  document.querySelectorAll(".chip").forEach((c) => c.classList.toggle("active", c.dataset.filter === view.filter));
+
+  // 保存場所タブ
+  const tabs = ["すべて", ...LOCATIONS];
+  $("locTabs").innerHTML = tabs.map((t) => {
+    const n = t === "すべて" ? sorted.length : sorted.filter((x) => x.location === t).length;
+    return `<button class="tab ${view.loc === t ? "active" : ""}" data-loc="${t}">${LOC_ICON[t] || ""} ${t} ${n}</button>`;
+  }).join("");
+
+  const q = view.q.trim().toLowerCase();
+  const shown = sorted.filter((it) => {
+    const d = daysLeft(it.expiry);
+    if (view.filter === "expired" && d >= 0) return false;
+    if (view.filter === "soon" && (d < 0 || d > 3)) return false;
+    if (view.loc !== "すべて" && it.location !== view.loc) return false;
+    if (q && !(`${it.name} ${it.memo || ""} ${it.addedBy || ""}`.toLowerCase().includes(q))) return false;
+    return true;
+  });
+
+  if (!shown.length) {
+    $("list").innerHTML = items.length
+      ? `<div class="empty"><div class="big">🔍</div>該当する食材はありません</div>`
+      : `<div class="empty"><div class="big">🧺</div>まだ食材がありません<br>右下の「＋ 追加」から登録しましょう</div>`;
+    return;
+  }
+
+  $("list").innerHTML = shown.map((it) => {
+    const d = daysLeft(it.expiry);
+    const lv = level(d);
+    const badge = d < 0 ? `<b>${-d}日</b><small>過ぎてる</small>`
+      : d === 0 ? `<b>今日</b><small>まで</small>`
+      : d === 1 ? `<b>明日</b><small>まで</small>`
+      : `<b>${d}日</b><small>あと</small>`;
+    const qty = Number(it.qty) > 1 || it.unit ? `<span class="qty">×${esc(it.qty)}${esc(it.unit || "")}</span>` : "";
+    const useLabel = Number(it.qty) > 1 ? "1つ使った" : "使い切った";
+    return `<div class="item lv-${lv}" data-id="${esc(it.id)}">
+      <div class="badge">${badge}</div>
+      <div class="body" data-edit>
+        <div class="name">${esc(it.name)}${qty}</div>
+        <div class="meta">${LOC_ICON[it.location] || ""} ${esc(it.location)}・${esc(it.kind || "消費期限")} ${fmtDate(it.expiry)}</div>
+        ${it.memo ? `<div class="memo">📝 ${esc(it.memo)}</div>` : ""}
+        ${it.addedBy ? `<div class="meta">by ${esc(it.addedBy)}</div>` : ""}
+      </div>
+      <div class="actions"><button class="use-btn" data-use>${useLabel}</button></div>
+    </div>`;
+  }).join("");
+}
+
+// ---------- トースト ----------
+let toastTimer;
+function toast(msg, actionLabel, onAction) {
+  $("toastMsg").textContent = msg;
+  const btn = $("toastAction");
+  btn.style.display = actionLabel ? "" : "none";
+  btn.textContent = actionLabel || "";
+  btn.onclick = () => { hideToast(); onAction && onAction(); };
+  $("toast").classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, actionLabel ? 6000 : 3500);
+}
+function hideToast() { $("toast").classList.remove("show"); }
+
+// ---------- シート ----------
+function openSheet(id) { $(id).classList.add("open"); }
+function closeSheet(id) { $(id).classList.remove("open"); }
+document.querySelectorAll(".backdrop").forEach((bd) => {
+  bd.addEventListener("click", (e) => {
+    if (e.target === bd || e.target.closest("[data-close]")) closeSheet(bd.id);
+  });
+});
+
+function segSet(container, value) {
+  container.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.v === value));
+}
+function segGet(container) {
+  const b = container.querySelector("button.on");
+  return b ? b.dataset.v : "";
+}
+$("fLoc").innerHTML = LOCATIONS.map((l) => `<button type="button" data-v="${l}">${LOC_ICON[l]} ${l}</button>`).join("");
+[$("fKind"), $("fLoc")].forEach((c) => c.addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (b) segSet(c, b.dataset.v);
+}));
+
+$("quickDates").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  const d = today0();
+  if (b.dataset.m) d.setMonth(d.getMonth() + Number(b.dataset.m));
+  else d.setDate(d.getDate() + Number(b.dataset.d));
+  $("fExpiry").value = ymd(d);
+});
+
+function refreshNameHistory() {
+  const hist = lsGet(LS.history, []);
+  const names = new Set([...hist, ...items.map((x) => x.name)]);
+  $("nameHistory").innerHTML = [...names].slice(0, 100).map((n) => `<option value="${esc(n)}">`).join("");
+}
+
+function openEditor(item) {
+  editingId = item ? item.id : null;
+  $("editTitle").textContent = item ? "食材を編集" : "食材を追加";
+  $("deleteBtn").style.display = item ? "" : "none";
+  $("fName").value = item ? item.name : "";
+  const def = new Date(today0()); def.setDate(def.getDate() + 3);
+  $("fExpiry").value = item ? item.expiry : ymd(def);
+  segSet($("fKind"), item ? (item.kind || "消費期限") : "消費期限");
+  segSet($("fLoc"), item ? item.location : (view.loc !== "すべて" ? view.loc : "冷蔵"));
+  $("fQty").value = item ? item.qty : 1;
+  $("fUnit").value = item ? (item.unit || "") : "";
+  $("fMemo").value = item ? (item.memo || "") : "";
+  $("fInfo").textContent = item && item.addedBy
+    ? `登録：${item.addedBy}${item.updatedBy && item.updatedBy !== item.addedBy ? ` ／ 最終更新：${item.updatedBy}` : ""}`
+    : "";
+  refreshNameHistory();
+  openSheet("editSheet");
+  if (!item) setTimeout(() => $("fName").focus(), 200);
+}
+
+$("editForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const name = $("fName").value.trim();
+  const expiry = $("fExpiry").value;
+  if (!name || !expiry) return;
+  const now = Date.now();
+  const prev = items.find((x) => x.id === editingId);
+  const item = {
+    id: prev ? prev.id : uid(),
+    name,
+    expiry,
+    kind: segGet($("fKind")) || "消費期限",
+    location: segGet($("fLoc")) || "冷蔵",
+    qty: Math.max(1, Math.min(999, parseInt($("fQty").value, 10) || 1)),
+    unit: $("fUnit").value.trim(),
+    memo: $("fMemo").value.trim(),
+    addedBy: prev ? prev.addedBy : settings.name,
+    updatedBy: settings.name,
+    createdAt: prev ? prev.createdAt : now,
+    updatedAt: now,
+  };
+  const hist = lsGet(LS.history, []).filter((n) => n !== name);
+  hist.unshift(name);
+  lsSet(LS.history, hist.slice(0, 100));
+  closeSheet("editSheet");
+  saveItem(item);
+  toast(prev ? "更新しました" : `「${name}」を追加しました`);
+});
+
+$("deleteBtn").addEventListener("click", () => {
+  const it = items.find((x) => x.id === editingId);
+  if (!it) return;
+  closeSheet("editSheet");
+  removeItem(it.id);
+  toast(`「${it.name}」を削除しました`, "元に戻す", () => saveItem(it));
+});
+
+// ---------- 一覧の操作 ----------
+$("list").addEventListener("click", (e) => {
+  const row = e.target.closest(".item"); if (!row) return;
+  const it = items.find((x) => x.id === row.dataset.id); if (!it) return;
+  if (e.target.closest("[data-use]")) {
+    if (Number(it.qty) > 1) {
+      const before = { ...it };
+      saveItem({ ...it, qty: Number(it.qty) - 1, updatedBy: settings.name, updatedAt: Date.now() });
+      toast(`「${it.name}」残り ${Number(it.qty) - 1}${it.unit || ""}`, "元に戻す", () => saveItem(before));
+    } else {
+      removeItem(it.id);
+      toast(`「${it.name}」を使い切りました 🎉`, "元に戻す", () => saveItem(it));
+    }
+    return;
+  }
+  openEditor(it);
+});
+
+document.querySelector(".summary").addEventListener("click", (e) => {
+  const c = e.target.closest(".chip"); if (!c) return;
+  view.filter = view.filter === c.dataset.filter ? "all" : c.dataset.filter;
+  render();
+});
+$("locTabs").addEventListener("click", (e) => {
+  const t = e.target.closest(".tab"); if (!t) return;
+  view.loc = t.dataset.loc; render();
+});
+$("search").addEventListener("input", (e) => { view.q = e.target.value; render(); });
+$("addBtn").addEventListener("click", () => {
+  if (!settings.name) { openSettings(); toast("はじめに名前を設定してください"); return; }
+  openEditor(null);
+});
+$("refreshBtn").addEventListener("click", sync);
+
+// ---------- 設定 ----------
+function openSettings() {
+  $("sName").value = settings.name;
+  $("sUrl").value = settings.apiUrl;
+  $("sKey").value = settings.key;
+  $("modeNote").textContent = isShared()
+    ? "✅ 共有モード：家族と同じリストを使っています。"
+    : "いまは「この端末のみ」モードです。共有サーバーURLを設定すると家族で同じリストを使えます。";
+  openSheet("settingsSheet");
+}
+function readSettingsForm() {
+  return {
+    name: $("sName").value.trim(),
+    apiUrl: $("sUrl").value.trim(),
+    key: $("sKey").value.trim(),
+  };
+}
+$("settingsBtn").addEventListener("click", openSettings);
+$("saveSettingsBtn").addEventListener("click", async () => {
+  const next = readSettingsForm();
+  if (next.apiUrl && !/^https:\/\/script\.google(usercontent)?\.com\//.test(next.apiUrl)) {
+    toast("URLは https://script.google.com/… の形式で入力してください"); return;
+  }
+  const switchingToShared = !settings.apiUrl && next.apiUrl;
+  const localItems = items.slice();
+  settings = next;
+  lsSet(LS.settings, settings);
+  closeSheet("settingsSheet");
+  updateSyncLabel();
+  if (switchingToShared && localItems.length) {
+    // この端末だけで記録していた食材を共有リストへ移す
+    for (const it of localItems) {
+      try { await api("upsert", { item: it }); } catch {}
+    }
+  }
+  if (isShared()) await sync();
+  else render();
+  toast("設定を保存しました");
+});
+$("testBtn").addEventListener("click", async () => {
+  const prev = settings;
+  settings = { ...settings, ...readSettingsForm() };
+  try {
+    const data = await api("list");
+    toast(`接続OK！ 共有リストに ${data.items.length} 件あります`);
+  } catch (e) {
+    toast("接続できません：" + e.message);
+  } finally {
+    settings = prev;
+  }
+});
+$("shareBtn").addEventListener("click", async () => {
+  const cur = readSettingsForm();
+  if (!cur.apiUrl) { toast("先に共有サーバーURLを入力してください"); return; }
+  const prev = settings;
+  settings = { ...settings, ...cur };
+  const link = makeInviteLink();
+  settings = prev;
+  const text = "冷蔵庫の食材を家族で管理しよう！このリンクを開いてね 🥕";
+  try {
+    if (navigator.share) { await navigator.share({ title: "食材きげん帳", text, url: link }); return; }
+  } catch (e) { if (e.name === "AbortError") return; }
+  try { await navigator.clipboard.writeText(link); toast("招待リンクをコピーしました。LINEなどで送ってください"); }
+  catch { prompt("このリンクをコピーして家族に送ってください", link); }
+});
+
+// ---------- 起動 ----------
+if (readSetupFromHash()) toast("家族の共有リストに参加しました 🎉");
+render();
+updateSyncLabel();
+if (!settings.name) setTimeout(openSettings, 400);
+sync();
+setInterval(() => { if (document.visibilityState === "visible") sync(); }, 60000);
+setInterval(updateSyncLabel, 15000);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") { render(); sync(); }
+});
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+})();
+</script>
+</body>
+</html>
