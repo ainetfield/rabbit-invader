@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#2f7d5b">
+<title>おうち食材ノート</title>
+<style>
+  :root {
+    --bg: #f6f5f1;
+    --surface: #ffffff;
+    --text: #1f2421;
+    --muted: #6b716d;
+    --border: #e2e0d9;
+    --accent: #2f7d5b;
+    --accent-ink: #ffffff;
+    --expired: #c0392b;
+    --expired-bg: #fdecea;
+    --today: #d35400;
+    --today-bg: #fdf0e6;
+    --soon: #b7950b;
+    --soon-bg: #fdf8e1;
+    --week: #2471a3;
+    --week-bg: #eaf3fa;
+    --ok: #2f7d5b;
+    --ok-bg: #e8f5ee;
+    --shadow: 0 1px 3px rgba(0,0,0,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151816;
+      --surface: #1f2421;
+      --text: #ecefed;
+      --muted: #9aa29d;
+      --border: #333a36;
+      --accent: #4fb386;
+      --accent-ink: #0f1311;
+      --expired: #ff7b6e;
+      --expired-bg: #3a1f1c;
+      --today: #ffa45c;
+      --today-bg: #3a2a1c;
+      --soon: #f1d25a;
+      --soon-bg: #35301a;
+      --week: #74b6e8;
+      --week-bg: #1b2a36;
+      --ok: #6fd3a3;
+      --ok-bg: #1a2f25;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    padding-bottom: 96px;
+  }
+  header {
+    position: sticky; top: 0; z-index: 5;
+    background: var(--bg);
+    padding: 16px 16px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+  h1 small { font-size: 12px; color: var(--muted); font-weight: normal; margin-left: auto; }
+
+  .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 8px; text-align: center; cursor: pointer; box-shadow: var(--shadow);
+  }
+  .stat b { display: block; font-size: 22px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 11px; color: var(--muted); }
+  .stat.expired b { color: var(--expired); }
+  .stat.today b { color: var(--today); }
+  .stat.soon b { color: var(--soon); }
+  .stat.total b { color: var(--accent); }
+  .stat.active { outline: 2px solid var(--accent); }
+
+  .toolbar { display: flex; gap: 8px; }
+  .toolbar input[type=search] { flex: 1 1 0; min-width: 0; }
+  .toolbar select { flex: none; max-width: 40%; }
+  .chips { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0 2px; scrollbar-width: none; }
+  .chip {
+    flex: none; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    border-radius: 999px; padding: 4px 12px; font-size: 13px; cursor: pointer;
+  }
+  .chip[aria-pressed=true] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+  input, select, textarea, button { font: inherit; color: inherit; }
+  input, select, textarea {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 10px; width: 100%;
+  }
+  select { width: auto; }
+  button { cursor: pointer; }
+
+  main { padding: 12px 16px; }
+  .group-title { font-size: 13px; color: var(--muted); margin: 16px 0 6px; font-weight: 600; }
+  .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .item {
+    background: var(--surface); border: 1px solid var(--border); border-left: 5px solid var(--ok);
+    border-radius: 10px; padding: 10px 12px; display: grid;
+    grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; box-shadow: var(--shadow);
+  }
+  .item.expired { border-left-color: var(--expired); }
+  .item.today { border-left-color: var(--today); }
+  .item.soon { border-left-color: var(--soon); }
+  .item.week { border-left-color: var(--week); }
+  .item .name { font-weight: 600; overflow-wrap: anywhere; }
+  .item .meta { font-size: 12px; color: var(--muted); grid-column: 1; overflow-wrap: anywhere; }
+  .badge {
+    grid-row: 1 / span 2; grid-column: 2; text-align: center; border-radius: 8px;
+    padding: 4px 10px; min-width: 76px; font-size: 12px;
+  }
+  .badge b { display: block; font-size: 18px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .expired .badge { background: var(--expired-bg); color: var(--expired); }
+  .today .badge { background: var(--today-bg); color: var(--today); }
+  .soon .badge { background: var(--soon-bg); color: var(--soon); }
+  .week .badge { background: var(--week-bg); color: var(--week); }
+  .ok .badge { background: var(--ok-bg); color: var(--ok); }
+  .actions { grid-column: 1 / -1; display: flex; gap: 6px; justify-content: flex-end; margin-top: 4px; }
+  .actions button {
+    border: 1px solid var(--border); background: transparent; border-radius: 6px;
+    padding: 2px 10px; font-size: 13px;
+  }
+  .actions .use { border-color: var(--accent); color: var(--accent); }
+  .tag { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 4px; background: var(--bg); border: 1px solid var(--border); margin-right: 4px; }
+
+  .empty { text-align: center; color: var(--muted); padding: 48px 16px; }
+  .empty p { margin: 4px 0; }
+
+  .fab {
+    position: fixed; right: max(16px, calc(50% - 344px)); bottom: calc(20px + env(safe-area-inset-bottom));
+    background: var(--accent); color: var(--accent-ink); border: none; border-radius: 999px;
+    padding: 14px 22px; font-size: 16px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,.2); z-index: 6;
+  }
+
+  dialog {
+    border: none; border-radius: 14px; padding: 0; width: min(520px, calc(100vw - 32px));
+    background: var(--surface); color: var(--text); max-height: calc(100vh - 32px);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  dialog form { padding: 18px; display: grid; gap: 12px; }
+  dialog h2 { margin: 0; font-size: 18px; }
+  label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+  label > input, label > select, label > textarea { color: var(--text); font-size: 16px; width: 100%; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .quick { display: flex; flex-wrap: wrap; gap: 6px; }
+  .quick button { border: 1px solid var(--border); background: var(--bg); border-radius: 6px; padding: 2px 10px; font-size: 13px; }
+  .seg { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg label { flex: 1; display: block; text-align: center; padding: 6px; cursor: pointer; color: var(--text); font-size: 14px; }
+  .seg input { display: none; }
+  .seg label:has(input:checked) { background: var(--accent); color: var(--accent-ink); }
+  .dlg-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+  .btn { border: 1px solid var(--border); background: transparent; border-radius: 8px; padding: 8px 16px; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  .btn.danger { color: var(--expired); border-color: var(--expired); margin-right: auto; }
+
+  .menu-btn { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 6px 10px; }
+  .toast {
+    position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 8px 16px; border-radius: 8px; font-size: 14px;
+    opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 10; max-width: calc(100vw - 32px);
+  }
+  .toast.show { opacity: 1; pointer-events: auto; }
+  .toast button { background: none; border: none; color: var(--accent); font-weight: 600; margin-left: 8px; }
+  @media (max-width: 420px) {
+    .stat b { font-size: 18px; }
+    .row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>🥕 おうち食材ノート <small id="todayLabel"></small></h1>
+    <div class="summary">
+      <div class="stat expired" data-status="expired" role="button" tabindex="0"><b id="cExpired">0</b><span>期限切れ</span></div>
+      <div class="stat today" data-status="today" role="button" tabindex="0"><b id="cToday">0</b><span>今日まで</span></div>
+      <div class="stat soon" data-status="soon3" role="button" tabindex="0"><b id="cSoon">0</b><span>3日以内</span></div>
+      <div class="stat total" data-status="all" role="button" tabindex="0"><b id="cTotal">0</b><span>すべて</span></div>
+    </div>
+    <div class="toolbar">
+      <input type="search" id="q" placeholder="食材名・メモで検索" aria-label="検索">
+      <select id="sort" aria-label="並び替え">
+        <option value="expiry">期限が近い順</option>
+        <option value="added">登録が新しい順</option>
+        <option value="name">名前順</option>
+      </select>
+      <button class="menu-btn" id="menuBtn" aria-label="メニュー">⋯</button>
+    </div>
+    <div class="chips" id="locChips"></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="list"></div>
+</main>
+
+<button class="fab" id="addBtn">＋ 食材を追加</button>
+
+<dialog id="editDlg">
+  <form method="dialog" id="editForm">
+    <h2 id="dlgTitle">食材を追加</h2>
+    <label>食材名
+      <input name="name" required maxlength="60" placeholder="例：牛乳" list="nameHistory" autocomplete="off">
+    </label>
+    <datalist id="nameHistory"></datalist>
+    <div class="row">
+      <label>期限の種類
+        <div class="seg">
+          <label><input type="radio" name="kind" value="消費期限" checked>消費期限</label>
+          <label><input type="radio" name="kind" value="賞味期限">賞味期限</label>
+        </div>
+      </label>
+      <label>保存場所
+        <select name="location"></select>
+      </label>
+    </div>
+    <label>期限日
+      <input type="date" name="expiry" required>
+    </label>
+    <div class="quick" id="quickDates"></div>
+    <div class="row">
+      <label>カテゴリ
+        <select name="category"></select>
+      </label>
+      <label>数量
+        <input name="qty" maxlength="20" placeholder="例：1本 / 300g">
+      </label>
+    </div>
+    <label>メモ
+      <input name="memo" maxlength="100" placeholder="開封済み など">
+    </label>
+    <div class="dlg-actions">
+      <button type="button" class="btn danger" id="delBtn" hidden>削除</button>
+      <button type="button" class="btn" id="cancelBtn">キャンセル</button>
+      <button type="submit" class="btn primary">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="menuDlg">
+  <form method="dialog">
+    <h2>メニュー</h2>
+    <button type="button" class="btn" id="notifyBtn">🔔 期限が近い食材を通知する</button>
+    <button type="button" class="btn" id="exportBtn">⬇ データを書き出す（JSON）</button>
+    <label class="btn" style="text-align:center;color:var(--text);cursor:pointer">⬆ データを読み込む（JSON）
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
+    </label>
+    <button type="button" class="btn" id="historyBtn">📜 使い切った履歴を見る</button>
+    <button type="button" class="btn danger" id="clearExpiredBtn" style="margin-right:0">期限切れをまとめて削除</button>
+    <p style="font-size:12px;color:var(--muted);margin:0">データはこの端末のブラウザに保存されます。機種変更の前に書き出してください。</p>
+    <div class="dlg-actions"><button class="btn primary" value="close">閉じる</button></div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(() => {
+  'use strict';
+  const STORE_KEY = 'food-expiry-items-v1';
+  const HISTORY_KEY = 'food-expiry-history-v1';
+  const LOCATIONS = ['冷蔵', '冷凍', '野菜室', '常温'];
+  const CATEGORIES = ['野菜', '果物', '肉', '魚', '卵・乳製品', '豆腐・大豆', '調味料', '飲料', 'パン・主食', 'お惣菜', 'お菓子', 'その他'];
+  const CAT_ICON = { '野菜':'🥬','果物':'🍎','肉':'🥩','魚':'🐟','卵・乳製品':'🥛','豆腐・大豆':'🫘','調味料':'🧂','飲料':'🧃','パン・主食':'🍞','お惣菜':'🍱','お菓子':'🍪','その他':'📦' };
+  const QUICK = [['今日',0],['明日',1],['+3日',3],['+1週間',7],['+2週間',14],['+1ヶ月','1m'],['+3ヶ月','3m']];
+
+  // ---- storage (fails gracefully) ----
+  const load = (k) => { try { return JSON.parse(localStorage.getItem(k)) || []; } catch { return []; } };
+  const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { toast('保存に失敗しました'); } };
+  let items = load(STORE_KEY);
+  let history = load(HISTORY_KEY);
+  const persist = () => { save(STORE_KEY, items); save(HISTORY_KEY, history.slice(-300)); };
+
+  // ---- date helpers (local date, no TZ drift) ----
+  const pad = (n) => String(n).padStart(2, '0');
+  const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const parseYmd = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+  const today = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+  const daysLeft = (s) => Math.round((parseYmd(s) - today()) / 86400000);
+  const WD = ['日','月','火','水','木','金','土'];
+  const fmtDate = (s) => { const d = parseYmd(s); return `${d.getMonth() + 1}/${d.getDate()}(${WD[d.getDay()]})`; };
+
+  function status(n) {
+    if (n < 0) return 'expired';
+    if (n === 0) return 'today';
+    if (n <= 3) return 'soon';
+    if (n <= 7) return 'week';
+    return 'ok';
+  }
+  function badgeText(n) {
+    if (n < 0) return [`${-n}日`, '過ぎています'];
+    if (n === 0) return ['今日', 'まで'];
+    return [`あと${n}日`, ''];
+  }
+
+  // ---- state ----
+  let filterLoc = 'all';
+  let filterStatus = 'all';
+  let editingId = null;
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+  // ---- render ----
+  function renderChips() {
+    const chips = [['all', 'すべての場所'], ...LOCATIONS.map((l) => [l, l])];
+    $('locChips').innerHTML = chips.map(([v, t]) => {
+      const n = v === 'all' ? items.length : items.filter((i) => i.location === v).length;
+      return `<button class="chip" data-loc="${esc(v)}" aria-pressed="${filterLoc === v}">${esc(t)} ${n}</button>`;
+    }).join('');
+  }
+
+  function renderSummary() {
+    const ds = items.map((i) => daysLeft(i.expiry));
+    $('cExpired').textContent = ds.filter((n) => n < 0).length;
+    $('cToday').textContent = ds.filter((n) => n === 0).length;
+    $('cSoon').textContent = ds.filter((n) => n > 0 && n <= 3).length;
+    $('cTotal').textContent = items.length;
+    document.querySelectorAll('.stat').forEach((el) => el.classList.toggle('active', el.dataset.status === filterStatus && filterStatus !== 'all'));
+    const t = new Date();
+    $('todayLabel').textContent = `今日 ${t.getMonth() + 1}/${t.getDate()}(${WD[t.getDay()]})`;
+  }
+
+  function matchesStatus(n) {
+    switch (filterStatus) {
+      case 'expired': return n < 0;
+      case 'today': return n === 0;
+      case 'soon3': return n > 0 && n <= 3;
+      default: return true;
+    }
+  }
+
+  function render() {
+    renderSummary();
+    renderChips();
+    const q = $('q').value.trim().toLowerCase();
+    let list = items.filter((i) =>
+      (filterLoc === 'all' || i.location === filterLoc) &&
+      matchesStatus(daysLeft(i.expiry)) &&
+      (!q || `${i.name} ${i.memo || ''} ${i.category}`.toLowerCase().includes(q)));
+
+    const sort = $('sort').value;
+    list.sort((a, b) =>
+      sort === 'name' ? a.name.localeCompare(b.name, 'ja') :
+      sort === 'added' ? b.addedAt - a.addedAt :
+      a.expiry.localeCompare(b.expiry) || a.name.localeCompare(b.name, 'ja'));
+
+    if (!items.length) {
+      $('list').innerHTML = `<div class="empty"><p style="font-size:40px">🧺</p><p>まだ食材が登録されていません</p><p>右下の「＋ 食材を追加」から登録しましょう</p></div>`;
+      return;
+    }
+    if (!list.length) {
+      $('list').innerHTML = `<div class="empty"><p>条件に合う食材はありません</p></div>`;
+      return;
+    }
+
+    const groups = sort === 'expiry'
+      ? [['expired','⚠ 期限切れ'],['today','今日が期限'],['soon','3日以内'],['week','1週間以内'],['ok','まだ大丈夫']]
+      : [[null, null]];
+    $('list').innerHTML = groups.map(([g, title]) => {
+      const gi = g ? list.filter((i) => status(daysLeft(i.expiry)) === g) : list;
+      if (!gi.length) return '';
+      return (title ? `<div class="group-title">${title}（${gi.length}）</div>` : '') +
+        `<ul class="list">${gi.map(itemHtml).join('')}</ul>`;
+    }).join('');
+  }
+
+  function itemHtml(i) {
+    const n = daysLeft(i.expiry);
+    const [big, small] = badgeText(n);
+    return `<li class="item ${status(n)}" data-id="${esc(i.id)}">
+      <div class="name">${CAT_ICON[i.category] || '📦'} ${esc(i.name)}${i.qty ? ` <span style="font-weight:normal;color:var(--muted)">${esc(i.qty)}</span>` : ''}</div>
+      <div class="badge"><b>${big}</b>${small}</div>
+      <div class="meta"><span class="tag">${esc(i.location)}</span>${esc(i.kind)} ${fmtDate(i.expiry)}${i.memo ? ` ・ ${esc(i.memo)}` : ''}</div>
+      <div class="actions">
+        <button data-act="edit">編集</button>
+        <button data-act="discard">捨てた</button>
+        <button class="use" data-act="use">使い切った</button>
+      </div>
+    </li>`;
+  }
+
+  // ---- dialog ----
+  const form = $('editForm');
+  form.location.innerHTML = LOCATIONS.map((l) => `<option>${l}</option>`).join('');
+  form.category.innerHTML = CATEGORIES.map((c) => `<option>${c}</option>`).join('');
+  $('quickDates').innerHTML = QUICK.map(([t, v]) => `<button type="button" data-v="${v}">${t}</button>`).join('');
+  $('quickDates').addEventListener('click', (e) => {
+    const v = e.target.dataset.v; if (v == null) return;
+    const d = today();
+    if (v.endsWith('m')) d.setMonth(d.getMonth() + parseInt(v)); else d.setDate(d.getDate() + Number(v));
+    form.expiry.value = ymd(d);
+  });
+
+  // Learn from past entries: typing a known name pre-fills category/location/kind.
+  function refreshNameHistory() {
+    const names = [...new Set([...items, ...history].map((i) => i.name))].slice(-200);
+    $('nameHistory').innerHTML = names.map((n) => `<option value="${esc(n)}">`).join('');
+  }
+  form.name.addEventListener('change', () => {
+    if (editingId) return;
+    const prev = [...history, ...items].filter((i) => i.name === form.name.value.trim()).pop();
+    if (!prev) return;
+    form.category.value = prev.category;
+    form.location.value = prev.location;
+    form.querySelector(`input[name=kind][value="${prev.kind}"]`).checked = true;
+  });
+
+  function openEdit(item) {
+    editingId = item ? item.id : null;
+    form.reset();
+    $('dlgTitle').textContent = item ? '食材を編集' : '食材を追加';
+    $('delBtn').hidden = !item;
+    if (item) {
+      form.name.value = item.name;
+      form.expiry.value = item.expiry;
+      form.location.value = item.location;
+      form.category.value = item.category;
+      form.qty.value = item.qty || '';
+      form.memo.value = item.memo || '';
+      form.querySelector(`input[name=kind][value="${item.kind}"]`).checked = true;
+    } else {
+      form.location.value = filterLoc !== 'all' ? filterLoc : '冷蔵';
+      form.category.value = 'その他';
+    }
+    refreshNameHistory();
+    $('editDlg').showModal();
+    if (!item) form.name.focus();
+  }
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const data = {
+      name: form.name.value.trim(),
+      expiry: form.expiry.value,
+      kind: form.kind.value,
+      location: form.location.value,
+      category: form.category.value,
+      qty: form.qty.value.trim(),
+      memo: form.memo.value.trim(),
+    };
+    if (!data.name || !data.expiry) return;
+    if (editingId) {
+      Object.assign(items.find((i) => i.id === editingId), data);
+      toast('更新しました');
+    } else {
+      items.push({ id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()), addedAt: Date.now(), ...data });
+      toast(`「${data.name}」を追加しました`);
+    }
+    persist(); render();
+    $('editDlg').close();
+  });
+  $('cancelBtn').onclick = () => $('editDlg').close();
+  $('delBtn').onclick = () => {
+    const it = items.find((i) => i.id === editingId);
+    if (it && confirm(`「${it.name}」を削除しますか？`)) {
+      removeItem(it, null);
+      $('editDlg').close();
+    }
+  };
+
+  // ---- actions ----
+  let lastRemoved = null;
+  function removeItem(it, outcome) {
+    items = items.filter((i) => i.id !== it.id);
+    if (outcome) history.push({ ...it, outcome, doneAt: Date.now() });
+    lastRemoved = { it, outcome };
+    persist(); render();
+    const label = outcome === 'used' ? '使い切りました' : outcome === 'discarded' ? '廃棄として記録しました' : '削除しました';
+    toast(`「${it.name}」を${label}`, true);
+  }
+  function undo() {
+    if (!lastRemoved) return;
+    items.push(lastRemoved.it);
+    if (lastRemoved.outcome) history = history.filter((h) => !(h.id === lastRemoved.it.id && h.outcome === lastRemoved.outcome));
+    lastRemoved = null;
+    persist(); render();
+    toast('元に戻しました');
+  }
+
+  $('list').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-act]'); if (!btn) return;
+    const it = items.find((i) => i.id === btn.closest('.item').dataset.id); if (!it) return;
+    if (btn.dataset.act === 'edit') openEdit(it);
+    if (btn.dataset.act === 'use') removeItem(it, 'used');
+    if (btn.dataset.act === 'discard') removeItem(it, 'discarded');
+  });
+
+  $('addBtn').onclick = () => openEdit(null);
+  $('q').addEventListener('input', render);
+  $('sort').addEventListener('change', render);
+  $('locChips').addEventListener('click', (e) => {
+    const c = e.target.closest('.chip'); if (!c) return;
+    filterLoc = c.dataset.loc; render();
+  });
+  document.querySelectorAll('.stat').forEach((el) => {
+    const fn = () => { filterStatus = (filterStatus === el.dataset.status) ? 'all' : el.dataset.status; render(); };
+    el.addEventListener('click', fn);
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } });
+  });
+
+  // ---- menu ----
+  $('menuBtn').onclick = () => $('menuDlg').showModal();
+  $('exportBtn').onclick = () => {
+    const blob = new Blob([JSON.stringify({ version: 1, items, history }, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `food-expiry-${ymd(new Date())}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  $('importFile').onchange = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      const data = JSON.parse(await f.text());
+      const inc = Array.isArray(data) ? data : data.items;
+      if (!Array.isArray(inc)) throw new Error();
+      const valid = inc.filter((i) => i && i.id && i.name && /^\d{4}-\d{2}-\d{2}$/.test(i.expiry));
+      const ids = new Set(items.map((i) => i.id));
+      const added = valid.filter((i) => !ids.has(i.id));
+      items.push(...added);
+      if (Array.isArray(data.history)) {
+        const hk = new Set(history.map((h) => h.id + h.doneAt));
+        history.push(...data.history.filter((h) => h && h.id && !hk.has(h.id + h.doneAt)));
+      }
+      persist(); render();
+      toast(`${added.length}件を読み込みました`);
+      $('menuDlg').close();
+    } catch { toast('読み込めないファイルです'); }
+    e.target.value = '';
+  };
+  $('clearExpiredBtn').onclick = () => {
+    const ex = items.filter((i) => daysLeft(i.expiry) < 0);
+    if (!ex.length) return toast('期限切れの食材はありません');
+    if (!confirm(`期限切れの${ex.length}件を「捨てた」として削除しますか？`)) return;
+    ex.forEach((i) => history.push({ ...i, outcome: 'discarded', doneAt: Date.now() }));
+    items = items.filter((i) => daysLeft(i.expiry) >= 0);
+    persist(); render(); $('menuDlg').close();
+    toast(`${ex.length}件を削除しました`);
+  };
+  $('historyBtn').onclick = () => {
+    const recent = history.slice(-30).reverse();
+    const used = history.filter((h) => h.outcome === 'used').length;
+    const disc = history.filter((h) => h.outcome === 'discarded').length;
+    const lines = recent.map((h) => `${h.outcome === 'used' ? '✅' : '🗑'} ${h.name}（${fmtDate(ymd(new Date(h.doneAt)))}）`);
+    alert(`使い切った: ${used}件 / 捨てた: ${disc}件\n\n最近の記録:\n${lines.join('\n') || 'まだありません'}`);
+  };
+
+  // ---- notifications (shown when the page is opened, at most once per day) ----
+  function notifyIfNeeded(force) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    const key = 'food-expiry-notified';
+    let last = null; try { last = localStorage.getItem(key); } catch {}
+    if (!force && last === ymd(today())) return;
+    const urgent = items.filter((i) => daysLeft(i.expiry) <= 1).sort((a, b) => a.expiry.localeCompare(b.expiry));
+    if (!urgent.length) { if (force) toast('今日・明日が期限の食材はありません'); return; }
+    new Notification('期限が近い食材があります', {
+      body: urgent.slice(0, 5).map((i) => `${i.name}：${badgeText(daysLeft(i.expiry)).join('')}`).join('\n'),
+    });
+    try { localStorage.setItem(key, ymd(today())); } catch {}
+  }
+  $('notifyBtn').onclick = async () => {
+    if (!('Notification' in window)) return toast('このブラウザは通知に対応していません');
+    const p = await Notification.requestPermission();
+    if (p === 'granted') { notifyIfNeeded(true); toast('通知をオンにしました（アプリを開いた時にお知らせします）'); }
+    else toast('通知が許可されませんでした');
+  };
+
+  // ---- toast ----
+  let toastTimer;
+  function toast(msg, withUndo) {
+    const t = $('toast');
+    t.innerHTML = esc(msg) + (withUndo ? '<button id="undoBtn">元に戻す</button>' : '');
+    if (withUndo) $('undoBtn').onclick = undo;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), withUndo ? 5000 : 2200);
+  }
+
+  // re-render when the date rolls over or the tab becomes visible again
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+  window.addEventListener('storage', (e) => { if (e.key === STORE_KEY) { items = load(STORE_KEY); render(); } });
+
+  render();
+  notifyIfNeeded(false);
+})();
+</script>
+</body>
+</html>
